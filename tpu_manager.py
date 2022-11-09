@@ -91,7 +91,8 @@ class GcpTpuManager:
         for file in files:
             if os.path.isdir(file):
                 patchwork.transfers.rsync(
-                    connection, file, "~/", exclude='.git')
+                    connection, file, "~/",
+                    exclude='.git', strict_host_keys=False)
             else:
                 connection.put(file)
 
