@@ -11,8 +11,9 @@ def pax_setup_commands(address: str) -> List[str]:
         "gsutil cp gs://pax-on-cloud-tpu-project/wheels/20221103/praxis*.whl .",
         "pip3 install ~/paxml*.whl",
         "pip3 install ~/praxis*.whl",
+        "sudo pip3 install ray[default]",
         "pip3 install ray[default]",
-        "sudo mkdir /dev/shm",
+        "sudo mkdir -p /dev/shm",
         "sudo mount -t tmpfs -o size=100g tmpfs /dev/shm",
         f"ray start --address={address} --load-code-from-local --resources='" + '{"tpu": 1}\'',
     ]
@@ -53,13 +54,13 @@ class PaxGcpManager(tpu_manager.GcpTpuManager):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("tpu_name", type=str, help="The name of the TPU.")
-    parser.add_argument("project", type=str, help="The name of the project.")
     parser.add_argument("zone", type=str, help="The name of the zone.")
     args, _ = parser.parse_known_args()
 
-    head_info = ray.init(address="auto")
+    head_info = ray.init()
     address = head_info.address_info["address"]
 
     manager = PaxGcpManager(

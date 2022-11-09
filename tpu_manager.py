@@ -59,9 +59,9 @@ class GcpTpuManager:
         self._zone = zone
         self._ip_addresses = get_ip_addresses(name=self._tpu_name, zone=self._zone)
         self._ray_head_address = ray_head_address
-        self._connections = {
-            [ ip_address: connect(ip_address) for ip_address in self._ip_addresses ]
-        }
+        self._connections = {}
+        for ip_address in self._ip_addresses:
+            self._connections[ip_address] = connect(ip_address)
 
     def _run_on_worker(self, ip_address: str, commands: Iterable[str], verbose: bool = True):
         for command in commands:
@@ -71,11 +71,11 @@ class GcpTpuManager:
                 command = command[5:]
                 output = self._connections[ip_address].sudo(command)
                 if verbose:
-                    logging.info(f"{ip_address}: " + output)
+                    logging.info(f"{ip_address}: " + output.stdout)
             else:
                 output = self._connections[ip_address].run(command)
                 if verbose:
-                    logging.info(f"{ip_address}: " + output)
+                    logging.info(f"{ip_address}: " + output.stdout)
 
     def _run_per_worker(self, fn: Callable[..., Any]):
         """Runs a callable function for all workers."""
@@ -84,7 +84,7 @@ class GcpTpuManager:
 
     def run_commands_on_workers(self, commands: List[str]):
         """Runs a list of commands for all workers."""
-        self._run_per_worker(functools.partial(self._run_on_worker, commands))
+        self._run_per_worker(functools.partial(self._run_on_worker, commands=commands))
 
     def copy_files_to_workers(self, files: List[str]):
         def copy_file_to_worker(ip_address: str):
