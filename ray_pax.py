@@ -15,7 +15,7 @@ def pax_setup_commands(address: str) -> List[str]:
         "pip3 install ray[default]",
         "sudo mkdir -p /dev/shm",
         "sudo mount -t tmpfs -o size=100g tmpfs /dev/shm",
-        f"ray start --address={address} --load-code-from-local --resources='" + '{"tpu": 1}\'',
+        f"ray start --address={address} --resources='" + '{"tpu": 1}\'',
     ]
 
 
@@ -29,8 +29,8 @@ class PaxGcpManager(tpu_manager.GcpTpuManager):
 
     def run(self):
         logging.info("Initializing VMs.")
-        self.initialize_vms()
         self.deploy_changes()
+        self.initialize_vms()
         self.nodes = []
         for _ in range(self.get_num_nodes()):
             self.run_pax.remote()

@@ -4,7 +4,8 @@ import os
 import requests
 import subprocess
 
-from typing import Any, Callable, List, Mapping
+from typing import Any, Callable, Iterable, List, Mapping
+import patchwork.transfers
 
 import multiprocessing
 from fabric import Connection
@@ -23,7 +24,6 @@ def get_project() -> str:
 
 
 def get_tpu_metadata(name: str, zone: str) -> Mapping[str, str]:
-
     headers = {
         'Authorization': f'Bearer {get_bearer()}',
     }
@@ -82,16 +82,24 @@ class GcpTpuManager:
         with multiprocessing.Pool(processes=len(self._ip_addresses)) as p:
             p.map(fn, self._ip_addresses)
 
-    def run_commands_on_workers(self, commands: List[str]):
+    def run_commands_on_workers(self, commands: Iterable[str]):
         """Runs a list of commands for all workers."""
         self._run_per_worker(functools.partial(self._run_on_worker, commands=commands))
 
-    def copy_files_to_workers(self, files: List[str]):
-        def copy_file_to_worker(ip_address: str):
-            for file in files:
-                self._connections[ip_address].put(file)
+    def _copy_file_to_worker(self, ip_address: str, files: Iterable[str]):
+        connection = self._connections[ip_address]
+        for file in files:
+            if os.path.isdir(file):
+                patchwork.transfers.rsync(
+                    connection, file, "~/", exclude='.git')
+            else:
+                connection.put(file)
 
-        self._run_per_worker(copy_file_to_worker)
+    def copy_files_to_workers(self, files: Iterable[str]):
+        if isinstance(files, str):
+            files = [files]
+        self._run_per_worker(
+            functools.partial(self._copy_file_to_worker, files=files))
 
     def get_num_nodes(self):
         return len(self._ip_addresses)
