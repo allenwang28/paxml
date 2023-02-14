@@ -931,3 +931,82 @@ class C4SpmdPipelineGpt3SmallAdam64Replicas(C4SpmdPipelineGpt3AdamOrgHP):
   EVAL_INTERVAL_STEPS = 100
   SUMMARY_INTERVAL_STEPS = 1
   CHECKPOINT_EVERY_N_STEPS = 200
+
+
+@experiment_registry.registry
+@experiment_registry.register
+class C4SpmdGpt3AdamPipeline(model_params.TransformerLmSpmdPipelineAdafactor,
+                             C4UnsupervisedDataset):
+  r"""Pipelined GPT-3 config using Adam optimizer with C4 dataset."""
+  PERCORE_BATCH_SIZE = 1
+
+  ICI_MESH_SHAPE = None
+  # Default to a single slice
+  DCN_MESH_SHAPE = None
+
+  # Pipeline related.
+  NUM_STAGES = None
+  CIRCULAR_REPEAT = 1
+  # One of the two need to be set.
+  NUM_MICROBATCHES = None
+  MICROBATCH_SIZE = None
+
+  MAX_SEQ_LEN = 2048
+
+  NUM_LAYERS = 96
+  NUM_HEADS = 96
+  MODEL_DIMS = 12288
+  HIDDEN_DIMS = MODEL_DIMS * 4
+  DIMS_PER_HEAD = MODEL_DIMS // NUM_HEADS
+  # pad vocab to TPU-friendly size
+  VOCAB_SIZE = 50304
+
+  CHECKPOINT_POLICY = layers.AutodiffCheckpointType.SAVE_NOTHING
+  CHECKPOINT_EVERY_N_STEPS = 2000
+  CHECKPOINT_MAX_TO_KEEP = 2
+
+  ACTIVATION_CLS = layers.GELU
+  USE_GATED_ACTIVATION = False
+
+  ATTEN_LOGIT_CAP = -1.0  # Disable logits cap in atten
+
+  # Optimizer related
+  LEARNING_RATE = 6e-5
+  WEIGHT_DECAY = 0.1
+  ADAM_BETA1 = 0.9
+  ADAM_BETA2 = 0.95
+  ADAM_EPSILON = 1e-8
+  ADAM_EPSILON_ROOT = 0.0
+  ADAM_CLIP_GRADIENT_NORM_TO_VALUE = 1.0
+
+  # Learning rate schedule
+  LR_COS_WARMUP = 265
+  LR_COS_DECAY_START = 266
+  LR_COS_DECAY_END = 108599
+  LR_COS_MIN_RATIO = 0.1
+  LR_COS_MAX = 1.0
+
+  def task(self) -> tasks_lib.SingleTask.HParams:
+    """Returns the task parameters."""
+    task_p = super().task()
+
+    lp = task_p.train.learner
+    lp.loss_name = 'total_loss'
+    lp.optimizer = optimizers.Adam.HParams(
+        beta1=self.ADAM_BETA1,
+        beta2=self.ADAM_BETA2,
+        weight_decay=self.WEIGHT_DECAY,
+        epsilon=self.ADAM_EPSILON,
+        epsilon_root=self.ADAM_EPSILON_ROOT,
+        clip_gradient_norm_to_value=self.CLIP_GRADIENT_NORM_TO_VALUE)
+    lp.optimizer.learning_rate = self.LEARNING_RATE
+
+    lp.optimizer.lr_schedule = (
+        schedules.LinearRampupCosineDecay.HParams(
+            warmup_steps=self.LR_COS_WARMUP,
+            decay_start=self.LR_COS_DECAY_START,
+            decay_end=self.LR_COS_DECAY_END,
+            min_ratio=self.LR_COS_MIN_RATIO,
+            max=self.LR_COS_MAX))
+
+    return task_p
